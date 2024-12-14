@@ -4,6 +4,7 @@ import bguspl.set.Env;
 
 import java.util.Queue;
 import java.util.LinkedList;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * This class manages the players' threads and data
@@ -55,7 +56,7 @@ public class Player implements Runnable {
 
 
     public Queue<Integer> playersQueue;
-    
+
     private boolean movesAllowed=true;
 
     private boolean toPenalty=false;
@@ -63,6 +64,7 @@ public class Player implements Runnable {
     private boolean toPoint=false;
 
     private Object movesAllowedLock;
+    private CountDownLatch startSignal;
 
     /**
      * The class constructor.
@@ -81,6 +83,7 @@ public class Player implements Runnable {
         terminate=false;
         movesAllowedLock=new Object();
         playersQueue = new LinkedList<Integer>();
+        this.startSignal = dealer.getStartSignal();
 
     }
 
@@ -91,7 +94,15 @@ public class Player implements Runnable {
     public void run() {
         playerThread = Thread.currentThread();
         env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
+
+        try {
+            startSignal.await(); // Wait until the dealer has placed all cards
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+
         if (!human) createArtificialIntelligence();
+
         while (!terminate) {
             if (toPoint) point();
             if (toPenalty) penalty();
@@ -102,8 +113,8 @@ public class Player implements Runnable {
             else {try {//failsafe
                 Thread.sleep(env.config.penaltyFreezeMillis+env.config.pointFreezeMillis+50);
             } catch (InterruptedException e) {}
-            movesAllowed=true;
-        }
+                movesAllowed=true;
+            }
         }
         if (!human) try { aiThread.join(); } catch (InterruptedException ignored) {}
         env.logger.info("Thread " + Thread.currentThread().getName() + " terminated.");
@@ -118,9 +129,9 @@ public class Player implements Runnable {
         aiThread = new Thread(() -> {
             env.logger.info("Thread " + Thread.currentThread().getName() + " starting.");
             while (!terminate) {
-            	while (movesAllowed) {
-                int slot = (int) (Math.random() * env.config.tableSize);
-            	 keyPressed(slot);
+                while (movesAllowed) {
+                    int slot = (int) (Math.random() * env.config.tableSize);
+                    keyPressed(slot);
                 }
                 try {
                     synchronized (this) { Thread.sleep(env.config.penaltyFreezeMillis+env.config.pointFreezeMillis+50); }
@@ -145,14 +156,14 @@ public class Player implements Runnable {
      */
     public  void keyPressed(int slot) {
         if (movesAllowed) {
-        boolean slotExists=false;
-        for(int i=0; i<3 && slotExists == false; i++){
-            if(table.getTokenArray(id,i) == slot){
-                slotExists = true;
+            boolean slotExists=false;
+            for(int i=0; i<3 && slotExists == false; i++){
+                if(table.getTokenArray(id,i) == slot){
+                    slotExists = true;
+                }
             }
-        } 
             if (slotExists == true){
-                    table.removeToken(id, slot);
+                table.removeToken(id, slot);
             }
             else{
                 table.placeToken(id, slot);
@@ -169,16 +180,16 @@ public class Player implements Runnable {
      */
     public void point() {
         synchronized(movesAllowedLock){
-        env.ui.setScore(id, ++score);
-        env.ui.setFreeze(id, env.config.pointFreezeMillis);
-    	try {
-			Thread.sleep(env.config.pointFreezeMillis);
-		} catch (InterruptedException e) {}
-    	env.ui.setFreeze(id,0); //unfreezes the player on the UI
-        toPoint=false;
-        movesAllowed=true;
-        if (!human) aiThread.interrupt();
-    }
+            env.ui.setScore(id, ++score);
+            env.ui.setFreeze(id, env.config.pointFreezeMillis);
+            try {
+                Thread.sleep(env.config.pointFreezeMillis);
+            } catch (InterruptedException e) {}
+            env.ui.setFreeze(id,0); //unfreezes the player on the UI
+            toPoint=false;
+            movesAllowed=true;
+            if (!human) aiThread.interrupt();
+        }
     }
 
     /**
@@ -186,37 +197,37 @@ public class Player implements Runnable {
      */
     public void penalty() {
         synchronized(movesAllowedLock){
-    	env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
-    	try {
-			Thread.sleep(env.config.penaltyFreezeMillis);
-		} catch (InterruptedException e) {}
-    	env.ui.setFreeze(id, 0); //unfreezes the player on the UI
-        toPenalty=false;
-        movesAllowed=true;
-        if (!human) aiThread.interrupt();
+            env.ui.setFreeze(id, env.config.penaltyFreezeMillis);
+            try {
+                Thread.sleep(env.config.penaltyFreezeMillis);
+            } catch (InterruptedException e) {}
+            env.ui.setFreeze(id, 0); //unfreezes the player on the UI
+            toPenalty=false;
+            movesAllowed=true;
+            if (!human) aiThread.interrupt();
+        }
     }
-    }
-    
+
     public void freezeUntilChecked() {
         synchronized(movesAllowedLock){
-        	movesAllowed=false;
+            movesAllowed=false;
         }
-        }
+    }
 
     public int score() {
         return score;
     }
-    
+
     public void toPoint(){
         toPoint=true;
         playerThread.interrupt();
     }
 
-    
+
     public void toPenalty(){
         toPenalty=true;
         playerThread.interrupt();
     }
-    
-    
+
+
 }

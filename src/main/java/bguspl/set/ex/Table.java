@@ -28,9 +28,9 @@ public class Table {
      * Mapping between a card and the slot it is in (null if none).
      */
     protected final Integer[] cardToSlot; // slot per card (if any)
-    
+
     private Dealer dealer;
-    
+
     private Thread dealerThread;
 
     private Integer[][] tokenArray;
@@ -52,15 +52,15 @@ public class Table {
         cardTokenLock=new Object();
         tokenArray = new Integer[env.config.players][3];
         for (int i=0; i<env.config.players; i++) {
-        	tokenArray[i][0]=-1;
-        	tokenArray[i][1]=-1;
-        	tokenArray[i][2]=-1;
+            tokenArray[i][0]=-1;
+            tokenArray[i][1]=-1;
+            tokenArray[i][2]=-1;
         }
     }
-    
+
     public void updateDealer(Dealer dealer, Thread dealerThread) {
-    	this.dealer=dealer;
-    	this.dealerThread=dealerThread;
+        this.dealer=dealer;
+        this.dealerThread=dealerThread;
     }
 
     /**
@@ -85,6 +85,8 @@ public class Table {
             System.out.println(sb.append("slots: ").append(slots).append(" features: ").append(Arrays.deepToString(features)));
         });
     }
+
+
 
     /**
      * Count the number of cards currently on the table.
@@ -123,23 +125,27 @@ public class Table {
      */
     public void removeCard(int slot) {
         synchronized(cardTokenLock){
-        try {
-            Thread.sleep(env.config.tableDelayMillis);
-        } catch (InterruptedException ignored) {}
+            if (slotToCard[slot] == null) {
+                env.logger.warning("No card to remove at slot " + slot);
+                return;
+            }
+            try {
+                Thread.sleep(env.config.tableDelayMillis);
+            } catch (InterruptedException ignored) {}
 
-        env.ui.removeCard(slot);
-        int card=slotToCard[slot];
-        slotToCard[slot] = null;
-        cardToSlot[card] = null;
-        for (int i=0;i<tokenArray.length;i++) {
-            
-        	for (int j=0; j<3; j++)
-        	if (tokenArray[i][j]==slot) {
-        		tokenArray[i][j]=-1;
-        		env.ui.removeToken(i, slot);
+            env.ui.removeCard(slot);
+            int card=slotToCard[slot];
+            slotToCard[slot] = null;
+            cardToSlot[card] = null;
+            for (int i=0;i<tokenArray.length;i++) {
+
+                for (int j=0; j<3; j++)
+                    if (tokenArray[i][j]==slot) {
+                        tokenArray[i][j]=-1;
+                        env.ui.removeToken(i, slot);
+                    }
             }
         }
-    }
     }
     /**
      * Places a player token on a grid slot.
@@ -148,21 +154,22 @@ public class Table {
      */
     public void placeToken(int player, int slot) {
         synchronized(cardTokenLock){
-        boolean placedToken=false; 
-        for (int i=0; i < 3 && placedToken==false; i++){
-            if (tokenArray[player][i] == -1 && slotToCard[slot]!=null) {
-                tokenArray[player][i] = slot;
-                placedToken=true; 
-                env.ui.placeToken(player, slot);
-                if (i==2)
-                {
-                	dealerThread.interrupt(); //wake up where have a ligal set
-                	dealer.AddToChecklist(player);
+            boolean placedToken=false;
+            for (int i=0; i < 3 && placedToken==false; i++){
+                if (tokenArray[player][i] == -1 && slotToCard[slot]!=null) {
+                    tokenArray[player][i] = slot;
+                    placedToken=true;
+                    env.ui.placeToken(player, slot);
+                    if (i==2)
+                    {
+                        dealerThread.interrupt(); //wake up where have a ligal set
+                        dealer.AddToChecklist(player);
+
+                    }
                 }
-                }
-            } 
+            }
+        }
     }
-}
 
     /**
      * Removes a token of a player from a grid slot.
@@ -174,46 +181,46 @@ public class Table {
         for (int i=0; i < 3; i++){
             if (tokenArray[player][i] == slot) {
                 tokenArray[player][i] = -1;
-                env.ui.removeToken(player, slot); 
+                env.ui.removeToken(player, slot);
                 return true;
             }
         }
 
         return false;
     }
-    
+
     public void setCardtoSlot (int card, int slot) {
         synchronized(cardTokenLock){
-    	if (slot==-1) cardToSlot [card]=null;
-    	else cardToSlot [card]=slot;
+            if (slot==-1) cardToSlot [card]=null;
+            else cardToSlot [card]=slot;
         }
     }
-    
+
     public Integer getCardtoSlot (int card) {
         synchronized(cardTokenLock){
-    	if (cardToSlot[card]==null) return -1;
-    	return cardToSlot[card];
+            if (cardToSlot[card]==null) return -1;
+            return cardToSlot[card];
         }
     }
-    
+
     public void setSlottoCard (int slot, int card) {
         synchronized(cardTokenLock){
-    	if (card==-1) slotToCard [slot]=null;
-    	else slotToCard [slot]=card;
+            if (card==-1) slotToCard [slot]=null;
+            else slotToCard [slot]=card;
         }
     }
-    
+
     public Integer getSlottoCard (int slot) {
         synchronized(cardTokenLock){
-    	if (slotToCard[slot]==null) return -1;
-    		return slotToCard[slot];
+            if (slotToCard[slot]==null) return -1;
+            return slotToCard[slot];
         }
     }
-    
+
     public void setTokenArray (int player, int num, int value) {
         tokenArray [player][num]=value;
     }
-    
+
     public int getTokenArray (int player, int num) {
         return tokenArray [player][num];
     }
